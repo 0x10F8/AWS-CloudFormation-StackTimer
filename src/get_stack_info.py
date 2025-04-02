@@ -15,6 +15,54 @@ client = session.client('cloudformation', region_name=region)
 # List all stacks in the specified AWS account and region
 list_stacks_response = client.list_stacks()
 
+
+def parse_stack_timings(stack_events: list, stack_name: str) -> tuple:
+    """
+    Parse stack events to get the creation and update times.
+    :param stack_events: List of stack events
+    :param stack_name: Name of the stack
+    :return: Tuple containing creation time and update times
+    """
+    create_start = "CREATE_IN_PROGRESS"
+    create_end = "CREATE_COMPLETE"
+
+    update_start = "UPDATE_IN_PROGRESS"
+    update_end = "UPDATE_COMPLETE"
+
+    failed_update_event = "UPDATE_ROLLBACK_COMPLETE"
+
+    create_time = None
+    failed_update_count = 0
+    update_times = []
+
+    current_event = None
+    current_end_time = None
+
+    for event in stack_events:
+        if event['LogicalResourceId'] == stack_name:
+            if event['ResourceStatus'] == failed_update_event:
+                failed_update_count += 1
+            if event['ResourceStatus'] == create_end:
+                current_event = "CREATE"
+                current_end_time = event['Timestamp']
+            elif event['ResourceStatus'] == update_end:
+                current_event = "UPDATE"
+                current_end_time = event['Timestamp']
+            elif event['ResourceStatus'] == create_start:
+                if current_event == "CREATE":
+                    start_time = event['Timestamp']
+                    create_time = current_end_time - start_time
+                else:
+                    raise ValueError("Unexpected event sequence")
+            elif event['ResourceStatus'] == update_start:
+                if current_event == "UPDATE":
+                    start_time = event['Timestamp']
+                    update_times.append(current_end_time - start_time)
+                else:
+                    raise ValueError("Unexpected event sequence")
+
+    return create_time, update_times, failed_update_count
+
 for stack in list_stacks_response['StackSummaries']:
     stack_name = stack['StackName']
 
@@ -38,30 +86,7 @@ for stack in list_stacks_response['StackSummaries']:
         stack_events.extend(stack_events_response['StackEvents'])
         next_token = stack_events_response.get('NextToken', None)
 
-    current_event = None
-    current_end_time = None
-    for event in stack_events_response['StackEvents']:
-        if event['LogicalResourceId'] == stack_name:
-            if event['ResourceStatus'] == failed_update_event:
-                failed_update_count += 1
-            if event['ResourceStatus'] == create_end:
-                current_event = "CREATE"
-                current_end_time = event['Timestamp']
-            elif event['ResourceStatus'] == update_end:
-                current_event = "UPDATE"
-                current_end_time = event['Timestamp']
-            elif event['ResourceStatus'] == create_start:
-                if current_event == "CREATE":
-                    start_time = event['Timestamp']
-                    create_time = current_end_time - start_time
-                else:
-                    raise ValueError("Unexpected event sequence")
-            elif event['ResourceStatus'] == update_start:
-                if current_event == "UPDATE":
-                    start_time = event['Timestamp']
-                    update_times.append(current_end_time - start_time)
-                else:
-                    raise ValueError("Unexpected event sequence")
+    create_time, update_times, failed_update_count = parse_stack_timings(stack_events, stack_name)
     
     print(f"Stack Name: {stack_name}")
     print(f"Current Status: {stack['StackStatus']}")

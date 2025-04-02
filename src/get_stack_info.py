@@ -64,6 +64,11 @@ def parse_stack_timings(stack_events: list, stack_name: str) -> tuple:
     return create_time, update_times, failed_update_count
 
 for stack in list_stacks_response['StackSummaries']:
+
+    # Skip stacks that are deleted
+    if stack['StackStatus'] == 'DELETE_COMPLETE':
+        continue
+
     stack_name = stack['StackName']
 
     create_start = "CREATE_IN_PROGRESS"

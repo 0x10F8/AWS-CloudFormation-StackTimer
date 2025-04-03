@@ -27,7 +27,7 @@ def parse_stack_timings(stack_events: list, stack_name: str) -> tuple:
     create_end = "CREATE_COMPLETE"
 
     update_start = "UPDATE_IN_PROGRESS"
-    update_end = "UPDATE_COMPLETE"
+    update_end = ["UPDATE_COMPLETE", "UPDATE_ROLLBACK_COMPLETE"]
 
     failed_update_event = "UPDATE_ROLLBACK_COMPLETE"
 
@@ -45,7 +45,7 @@ def parse_stack_timings(stack_events: list, stack_name: str) -> tuple:
             if event['ResourceStatus'] == create_end:
                 current_event = "CREATE"
                 current_end_time = event['Timestamp']
-            elif event['ResourceStatus'] == update_end:
+            elif event['ResourceStatus'] in update_end:
                 current_event = "UPDATE"
                 current_end_time = event['Timestamp']
             elif event['ResourceStatus'] == create_start:
